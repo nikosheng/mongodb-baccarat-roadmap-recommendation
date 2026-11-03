@@ -1,0 +1,49 @@
+# Two ways to run MongoDB:
+#   1. Point `.env`'s MONGO_URI at your own Atlas Cloud M10+ cluster (recommended
+#      for real vector search quality) — in this case you can ignore/stop the
+#      bundled `mongodb` service below.
+#   2. Use the bundled local `mongodb-atlas-local` service (fully offline),
+#      by setting MONGO_URI=mongodb://mongodb:27017/?directConnection=true
+#      in your .env and running with `docker compose --profile local-mongo up`.
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:latest
+    profiles: ["local-mongo"]
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ping:1})"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on: []
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+
+  # One-shot seeding helper: `docker compose run --rm seed`
+  seed:
+    build: ./backend
+    env_file:
+      - .env
+    depends_on: []
+    command: ["python", "-m", "app.seed.run_seed"]
+    profiles: ["tools"]
+
+volumes:
+  mongo_data:
