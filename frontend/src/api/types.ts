@@ -16,12 +16,37 @@ export interface Shoe {
   summary: ShoeSummary;
 }
 
+export interface CardDto {
+  rank: string;
+  suit: string;
+}
+
+export type NaturalType = "none" | "banker_natural" | "player_natural" | "both_natural";
+export type Lucky6Result = "none" | "banker_6_two_cards" | "banker_6_three_cards";
+
 export interface RoundDoc {
   shoeId: string;
   roundNo: number;
   result: Outcome;
   createdAt: string;
   source: string;
+
+  // Only populated for rounds dealt by the real baccarat dealer
+  // (source==="random_sim"); manual B/P/T entries have no card face data.
+  bankerCards?: CardDto[] | null;
+  playerCards?: CardDto[] | null;
+  bankerTotal?: number | null;
+  playerTotal?: number | null;
+  margin?: number | null;
+  bankerCardCount?: number | null;
+  playerCardCount?: number | null;
+  totalCardCount?: number | null;
+  bankerPair?: boolean | null;
+  playerPair?: boolean | null;
+  bankerPerfectPair?: boolean | null;
+  playerPerfectPair?: boolean | null;
+  naturalType?: NaturalType | null;
+  lucky6Result?: Lucky6Result | null;
 }
 
 export interface PatternMatch {
@@ -31,6 +56,7 @@ export interface PatternMatch {
   predictedNext: Outcome;
   confidence: number;
   lowConfidence: boolean;
+  alsoConsistentWith: string[];
 }
 
 export interface MatchResult {
@@ -45,6 +71,7 @@ export interface MatchResult {
   noMatch?: boolean;
   type?: string;
   derivedMatch?: DerivedMatchResult;
+  sideBetMatch?: SideBetMatchResult;
 }
 
 export interface Pattern {
@@ -54,6 +81,7 @@ export interface Pattern {
   nlDescription: string;
   canonicalSequence: string;
   minWindowLen: number;
+  structuralCategory: string;
   predictedNext: Outcome;
   baseConfidence: number;
   textForEmbedding: string;
@@ -175,6 +203,40 @@ export interface DerivedSimilarPatternHit {
   score: number;
 }
 
+// --------------------------------------------------------------------------
+// Side Bet (Lucky 6 v1, 見 docs/side-bet-lucky6-plan.md)
+// --------------------------------------------------------------------------
+
+export type DatasetType = "demo" | "monte_carlo";
+
+export interface SideBetMatchResult {
+  shoeId: string;
+  sourceRoundNo: number;
+  predictionForRoundNo: number;
+  triggeredAt: string;
+
+  windowLength: number;
+  datasetType: DatasetType;
+  insufficientData: boolean;
+  reason?: string | null;
+
+  topSimilarityScore?: number | null;
+  neighborCount: number;
+
+  lucky6TwoCardHits: number;
+  lucky6TwoCardRate?: number | null;
+  lucky6TwoCardBaseline?: number | null;
+  lucky6TwoCardLift?: number | null;
+
+  lucky6ThreeCardHits: number;
+  lucky6ThreeCardRate?: number | null;
+  lucky6ThreeCardBaseline?: number | null;
+  lucky6ThreeCardLift?: number | null;
+
+  corpusVersion?: string | null;
+  featureVersion?: string | null;
+}
+
 export interface DebugDerivedWindowDetail {
   shoeId: string;
   roundNo: number;
@@ -226,6 +288,8 @@ export interface DebugWindowDetail {
     baseConfidence: number;
     textForEmbedding: string;
     canonicalSequence: string;
+    structuralCategory: string;
+    eligible: boolean;
     score: number;
   }>;
   gaps?: number[];

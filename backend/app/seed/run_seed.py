@@ -18,7 +18,7 @@ from app.seed.default_derived_patterns import DEFAULT_DERIVED_PATTERNS
 from app.seed.default_patterns import DEFAULT_PATTERNS
 from app.services.derived_roads import DerivedTailSymbols, describe_derived_in_nl
 from app.services.embedder import embed_text
-from app.services.pattern_service import expand_sequence
+from app.services.pattern_service import expand_sequence, infer_structural_category
 from app.services.window_text import describe_window_in_nl
 
 logging.basicConfig(level=logging.INFO)
@@ -41,6 +41,7 @@ async def seed_patterns() -> None:
             "nlDescription": p["nlDescription"],
             "canonicalSequence": p["canonicalSequence"],
             "minWindowLen": len(seq),
+            "structuralCategory": infer_structural_category(seq),
             "predictedNext": p["predictedNext"],
             "baseConfidence": p["baseConfidence"],
             "textForEmbedding": text,

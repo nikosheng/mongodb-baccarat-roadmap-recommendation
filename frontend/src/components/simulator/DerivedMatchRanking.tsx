@@ -27,9 +27,9 @@ export function DerivedMatchRanking({ match }: { match: DerivedMatchResult | nul
         蟑螂{" "}
         <span className="font-mono-seq text-text-primary">{match.currentRoads.cockroach || "-"}</span>
       </div>
-      {match.topMatches.map((m, i) => (
-        <DerivedMatchCard key={m.patternId} match={m} rank={i} />
-      ))}
+      {match.topMatches[0] && (
+        <DerivedMatchCard key={match.topMatches[0].patternId} match={match.topMatches[0]} />
+      )}
     </div>
   );
 }

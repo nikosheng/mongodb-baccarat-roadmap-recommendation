@@ -7,17 +7,19 @@ VENV_PIP := $(VENV)/bin/pip
 UVICORN := $(VENV)/bin/uvicorn
 
 .DEFAULT_GOAL := help
-.PHONY: help env setup check-env seed calibrate-derived api web dev test
+.PHONY: help env setup check-env seed seed-sidebets calibrate-derived api web dev stop test
 
 help:
 	@printf '\nBaccarat Vector Match - available commands\n\n'
 	@printf '  make setup             建立 .env、Python venv、安裝前後端依賴\n'
 	@printf '  make check-env         檢查 Atlas 與 Voyage 設定\n'
 	@printf '  make seed              使用 Voyage 重新產生並寫入預設 patterns (大路 + 下三路)\n'
+	@printf '  make seed-sidebets     模擬合成牌靴並寫入 Side Bet (Lucky 6) 歷史切片/統計/向量索引\n'
 	@printf '  make calibrate-derived 校準下三路第二組 vector search 的 DERIVED_PATTERN_MIN_SCORE\n'
 	@printf '  make api               啟動 FastAPI 後端\n'
 	@printf '  make web               啟動 Vite 前端\n'
 	@printf '  make dev               同時啟動前後端\n'
+	@printf '  make stop              優雅停止前後端服務\n'
 	@printf '  make test              執行後端測試與前端 build 檢查\n\n'
 
 env:
@@ -40,6 +42,9 @@ check-env:
 seed: check-env
 	cd backend && ../$(VENV_PY) -m app.seed.run_seed
 
+seed-sidebets: check-env
+	cd backend && ../$(VENV_PY) -m app.seed.seed_side_bet_history
+
 calibrate-derived: check-env
 	cd backend && ../$(VENV_PY) -m app.seed.calibrate_derived
 
@@ -53,6 +58,42 @@ web:
 
 dev: check-env
 	$(MAKE) -j2 api web
+
+stop:
+	@set -e; \
+	if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		docker compose stop frontend backend; \
+	fi; \
+	command -v lsof >/dev/null 2>&1 || { printf '找不到 lsof，無法檢查本機服務程序。\n'; exit 1; }; \
+	pids=""; \
+	for port in 8000 5173; do \
+		for pid in $$(lsof -ti tcp:$$port -sTCP:LISTEN 2>/dev/null || true); do \
+			cwd=$$(lsof -a -p "$$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'); \
+			case "$$cwd" in \
+				"$(CURDIR)/backend"|"$(CURDIR)/backend/"*|"$(CURDIR)/frontend"|"$(CURDIR)/frontend/"*) \
+					printf '正在停止本機服務程序 %s (port %s)...\n' "$$pid" "$$port"; \
+					kill -TERM "$$pid"; \
+					pids="$$pids $$pid"; \
+					;; \
+			esac; \
+		done; \
+	done; \
+	if [ -n "$$pids" ]; then \
+		for attempt in $$(seq 1 10); do \
+			active=""; \
+			for pid in $$pids; do \
+				state=$$(ps -o stat= -p "$$pid" 2>/dev/null | tr -d ' '); \
+				case "$$state" in ""|Z*) ;; *) active="$$active $$pid";; esac; \
+			done; \
+			[ -z "$$active" ] && break; \
+			sleep 1; \
+		done; \
+		if [ -n "$$active" ]; then \
+			printf '部分程序未能在 10 秒内正常停止：%s\n' "$$active"; \
+			exit 1; \
+		fi; \
+	fi; \
+	printf '前後端服務已停止。\n'
 
 test:
 	cd backend && ../$(VENV_PY) -m pytest tests/ -v

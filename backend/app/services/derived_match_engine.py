@@ -101,8 +101,10 @@ async def match_derived(shoe_id: str, round_no: int) -> DerivedMatchResult | Non
 
     no_match = len(top_matches) == 0
 
-    if not no_match and all(m.lowConfidence for m in top_matches) and threshold is not None:
-        top_matches = top_matches[:1]
+    # The formal recommendation panel only ever shows a single pick (the
+    # Debug Inspector is where the rest of the raw candidate ranking can be
+    # inspected).
+    top_matches = top_matches[:1]
 
     result = DerivedMatchResult(
         shoeId=shoe_id,

@@ -24,9 +24,7 @@ export function MatchRanking({ match }: { match: MatchResult | null }) {
         Round {match.roundNo} · window:{" "}
         <span className="font-mono-seq text-text-primary">{match.currentWindow}</span>
       </div>
-      {match.topMatches.map((m, i) => (
-        <MatchCard key={m.patternId} match={m} rank={i} />
-      ))}
+      {match.topMatches[0] && <MatchCard key={match.topMatches[0].patternId} match={match.topMatches[0]} />}
     </div>
   );
 }

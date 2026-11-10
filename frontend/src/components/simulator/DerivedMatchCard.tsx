@@ -2,11 +2,8 @@ import type { DerivedPatternMatch } from "../../api/types";
 import { OutcomeBadge } from "../common/Badge";
 import { ScoreBar } from "../common/ScoreBar";
 
-const MEDALS = ["🥇", "🥈", "🥉"];
-
-export function DerivedMatchCard({ match, rank }: { match: DerivedPatternMatch; rank: number }) {
-  const medal = MEDALS[rank] ?? `${rank + 1}.`;
-  const isTop = rank === 0 && !match.lowConfidence;
+export function DerivedMatchCard({ match }: { match: DerivedPatternMatch }) {
+  const isTop = !match.lowConfidence;
 
   return (
     <div
@@ -17,9 +14,7 @@ export function DerivedMatchCard({ match, rank }: { match: DerivedPatternMatch; 
       }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="font-semibold">
-          {medal} {match.name}
-        </span>
+        <span className="font-semibold">{match.name}</span>
         {match.lowConfidence && (
           <span className="text-xs px-2 py-0.5 rounded bg-border-dim text-text-muted">信心低</span>
         )}

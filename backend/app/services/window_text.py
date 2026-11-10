@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-NL_DESCRIBER_VERSION = "1.0.0"
+NL_DESCRIBER_VERSION = "1.2.0"
 
 VALID_SYMBOLS = {"B", "P", "T"}
 WORD = {"B": "Banker", "P": "Player", "T": "Tie"}
@@ -134,8 +134,11 @@ def _compute_stats(sequence: list[str]) -> WindowStats:
     )
 
 
-def _runs(sequence: list[str]) -> list[tuple[str, int]]:
-    """Collapse sequence into list of (symbol, run_length)."""
+def compute_runs(sequence: list[str]) -> list[tuple[str, int]]:
+    """Collapse sequence into list of (symbol, run_length). Public helper
+    shared with pattern_structure.py, which classifies both pattern
+    canonicalSequences and live windows into structural categories based on
+    this same run decomposition."""
     out: list[tuple[str, int]] = []
     for s in sequence:
         if out and out[-1][0] == s:
@@ -143,6 +146,10 @@ def _runs(sequence: list[str]) -> list[tuple[str, int]]:
         else:
             out.append((s, 1))
     return out
+
+
+# Backwards-compatible private alias used elsewhere in this module.
+_runs = compute_runs
 
 
 def _detect_reversal(sequence: list[str], max_streak: dict[str, int]) -> str | None:
@@ -177,6 +184,33 @@ def _detect_reversal(sequence: list[str], max_streak: dict[str, int]) -> str | N
             return f"a long {WORD[prev_sym]} streak just interrupted by a single {WORD[last_sym]}"
 
     return None
+
+
+def _bucket_structure(sequence: list[str], reversal: str | None) -> str:
+    """Describe the *shape* of the window (how many distinct B/P runs it
+    contains, and whether a long run was broken and resumed) independent of
+    the exact streak length.
+
+    This is deliberately orthogonal to `_bucket_current_state` /
+    `_bucket_longest_run`, which are keyed on the exact streak length. Two
+    sequences can coincidentally share the same trailing streak length
+    (e.g. a plain "BBBB" query and the tail of a longer "BBBBPBBBB" pattern
+    both end in a streak of 4) while having completely different overall
+    structure (one continuous run vs. a run that was interrupted and then
+    resumed). Without this field those two sequences would be nearly
+    indistinguishable in embedding space just because of the length
+    coincidence; this field restores that distinction explicitly.
+    """
+    bp_runs = [r for r in _runs(sequence) if r[0] in ("B", "P")]
+    if len(bp_runs) <= 1:
+        return "single uninterrupted run, no break at all"
+    if reversal and "resumed" in reversal:
+        return "one long run broken by a brief interruption, then resumed on the same side"
+    if reversal:
+        return "one long run broken by a brief interruption near the end of the window"
+    if len(bp_runs) <= 3:
+        return "a small number of distinct runs with limited switching"
+    return "many short runs with frequent switching"
 
 
 def _detect_rhythm(double_chop_count: int, max_streak: dict[str, int], chop_ratio: float) -> str:
@@ -224,12 +258,25 @@ def _bucket_current_state(stats: WindowStats) -> str:
     side = WORD[stats.current_streak_type]
     n = stats.current_streak_len
     if n == 1:
-        return f"single {side} just appeared"
-    if n == 2:
-        return f"short {side} streak of two"
-    if n <= 4:
-        return f"ongoing {side} streak of {n}"
-    return f"long ongoing {side} streak of {n}"
+        base = f"single {side} just appeared"
+    elif n == 2:
+        base = f"short {side} streak of two"
+    elif n <= 4:
+        base = f"ongoing {side} streak of {n}"
+    else:
+        base = f"long ongoing {side} streak of {n}"
+
+    # Qualifier: is this streak everything we've seen so far, or is it a
+    # resumption after something else happened earlier in the window? Two
+    # windows can coincidentally share the exact same trailing streak
+    # length (e.g. "BBBB" and the tail of "BBBBPBBBB" both end in a streak
+    # of 4) while having a completely different history. Without this
+    # qualifier those two bucket strings would be byte-identical, which
+    # dominates the embedding similarity far more than the differences
+    # elsewhere in the template.
+    if n >= stats.length:
+        return f"{base}, spanning the entire window with nothing before it"
+    return f"{base}, resumed after something else happened earlier in the window"
 
 
 def _bucket_streak(n: int) -> str:
@@ -307,6 +354,7 @@ def describe_window_in_nl(sequence: list[str]) -> str:
         f"- Longest run: {_bucket_longest_run(stats)}",
         f"- Alternation: {_bucket_chop(stats)}",
         f"- Tie activity: {_bucket_tie(stats.ratios['T'])}",
+        f"- Structure: {_bucket_structure(sequence, stats.reversal)}",
         f"- Recent reversal: {stats.reversal or 'no notable reversal'}",
         f"- Overall rhythm: {stats.rhythm}",
         f"- Last three results: {_words(stats.last_three)}",

@@ -281,10 +281,12 @@ make check-env         # 驗證 Atlas/Voyage 設定
 make seed              # 重新產生並寫入預設 patterns 的 Voyage embeddings(大路 10 個 + 下三路 7 個)
 make calibrate-derived # (開發用)重新校準下三路 vector search 的 DERIVED_PATTERN_MIN_SCORE
 make dev               # 同時啟動後端和前端
+make stop              # 優雅停止前後端服務
 make test              # 後端 pytest + 前端 production build
 ```
 
 也可分開啟動服務：`make api` 和 `make web`。查看所有指令請執行 `make help`。
+`make stop` 會停止 Docker Compose 前後端服務，並正常終止本專案在 8000/5173 port 上的本機服務程序。
 `make seed` 會更新預設的大路 10 個 + 下三路 7 個 patterns，不會刪除自訂 patterns 或遊戲紀錄。
 
 ### 1. 設定環境變數

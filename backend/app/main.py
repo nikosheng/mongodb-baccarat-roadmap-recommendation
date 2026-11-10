@@ -17,6 +17,17 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast and loudly if SIDE_BET_WINDOW isn't one of the N values the
+    # seeded corpus actually supports — never silently fall back to a
+    # different N / stats (see docs/side-bet-lucky6-plan.md §1).
+    settings.validate_side_bet_window()
+    logger.info(
+        "Side Bet: window=%s dataset=%s supported=%s",
+        settings.side_bet_window,
+        settings.side_bet_dataset,
+        settings.side_bet_supported_window_list,
+    )
+
     logger.info("Starting up: ensuring Mongo indexes...")
     try:
         await ensure_indexes()

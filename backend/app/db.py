@@ -20,6 +20,8 @@ _db: AsyncIOMotorDatabase | None = None
 
 PATTERN_VECTOR_INDEX = "pattern_vec_idx"
 DERIVED_PATTERN_VECTOR_INDEX = "derived_pattern_vec_idx"
+SIDE_BET_VECTOR_INDEX = "side_bet_vec_idx"
+SIDE_BET_VECTOR_DIM = 13
 
 
 def get_client() -> AsyncIOMotorClient:
@@ -55,6 +57,25 @@ async def ensure_indexes() -> None:
     await db.derived_matches.create_index([("shoeId", ASCENDING), ("roundNo", ASCENDING)])
     await db.derived_matches.create_index([("triggeredAt", DESCENDING)])
 
+    # Side Bet (Lucky 6 v1): synthetic history slices + match history.
+    # Slices are filtered by windowLength/datasetType/corpusVersion at
+    # query time (never mixing different N, dataset, or corpus version),
+    # so index those alongside shoeId (used for per-shoe neighbor dedupe).
+    await db.side_bet_slices.create_index(
+        [("windowLength", ASCENDING), ("datasetType", ASCENDING), ("corpusVersion", ASCENDING)]
+    )
+    await db.side_bet_slices.create_index([("shoeId", ASCENDING)])
+    await db.side_bet_stats.create_index(
+        [("windowLength", ASCENDING), ("featureVersion", ASCENDING), ("corpusVersion", ASCENDING)],
+        unique=True,
+    )
+    await db.side_bet_baselines.create_index(
+        [("windowLength", ASCENDING), ("datasetType", ASCENDING), ("corpusVersion", ASCENDING)],
+        unique=True,
+    )
+    await db.side_bet_matches.create_index([("shoeId", ASCENDING), ("sourceRoundNo", ASCENDING)])
+    await db.side_bet_matches.create_index([("triggeredAt", DESCENDING)])
+
     # Atlas Vector Search indexes
     await _ensure_vector_index(
         db, db.patterns, PATTERN_VECTOR_INDEX, settings.voyage_dim
@@ -62,6 +83,7 @@ async def ensure_indexes() -> None:
     await _ensure_vector_index(
         db, db.derived_patterns, DERIVED_PATTERN_VECTOR_INDEX, settings.voyage_dim
     )
+    await _ensure_side_bet_vector_index(db, db.side_bet_slices)
 
 
 async def _ensure_vector_index(db: AsyncIOMotorDatabase, collection, index_name: str, dim: int) -> None:
@@ -100,6 +122,53 @@ async def _ensure_vector_index(db: AsyncIOMotorDatabase, collection, index_name:
         await _wait_for_index_ready(collection, index_name)
     except OperationFailure as exc:
         logger.error("Failed to create vector search index %s: %s", index_name, exc)
+        raise
+
+
+async def _ensure_side_bet_vector_index(db: AsyncIOMotorDatabase, collection) -> None:
+    """13-dim cosine index for `side_bet_slices`, filterable on
+    windowLength/datasetType/corpusVersion so a live query only ever
+    searches slices from the same N, dataset, and corpus version (see
+    docs/side-bet-lucky6-plan.md §5.3)."""
+    try:
+        existing = await collection.list_search_indexes().to_list(length=None)
+        names = {idx.get("name") for idx in existing}
+        if SIDE_BET_VECTOR_INDEX in names:
+            logger.info("Vector index %s already exists", SIDE_BET_VECTOR_INDEX)
+            return
+    except OperationFailure as exc:
+        logger.warning("Could not list search indexes (may not be Atlas): %s", exc)
+        return
+
+    definition = {
+        "fields": [
+            {
+                "type": "vector",
+                "path": "vector",
+                "numDimensions": SIDE_BET_VECTOR_DIM,
+                "similarity": "cosine",
+            },
+            {"type": "filter", "path": "corpusVersion"},
+            {"type": "filter", "path": "windowLength"},
+            {"type": "filter", "path": "datasetType"},
+        ]
+    }
+
+    try:
+        await collection.create_search_index(
+            {
+                "name": SIDE_BET_VECTOR_INDEX,
+                "type": "vectorSearch",
+                "definition": definition,
+            }
+        )
+        logger.info(
+            "Created vector search index %s, waiting for it to become queryable...",
+            SIDE_BET_VECTOR_INDEX,
+        )
+        await _wait_for_index_ready(collection, SIDE_BET_VECTOR_INDEX)
+    except OperationFailure as exc:
+        logger.error("Failed to create vector search index %s: %s", SIDE_BET_VECTOR_INDEX, exc)
         raise
 
 

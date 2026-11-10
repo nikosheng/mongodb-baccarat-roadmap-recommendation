@@ -34,12 +34,40 @@ class Shoe(BaseModel):
     summary: ShoeSummary = Field(default_factory=ShoeSummary)
 
 
+class Card(BaseModel):
+    rank: str
+    suit: str
+
+
+NaturalType = Literal["none", "banker_natural", "player_natural", "both_natural"]
+Lucky6Result = Literal["none", "banker_6_two_cards", "banker_6_three_cards"]
+
+
 class Round(BaseModel):
     shoeId: str
     roundNo: int
     result: Outcome
     createdAt: datetime = Field(default_factory=utcnow)
     source: str = "manual_sim"
+
+    # Card-face data: only populated for rounds dealt by the real baccarat
+    # dealer (source="random_sim"). Manual B/P/T entries (source="manual_sim")
+    # have no card face, so these all stay None — they must never be used as
+    # Side Bet feature inputs (see docs/side-bet-lucky6-plan.md §3.2).
+    bankerCards: Optional[list[Card]] = None
+    playerCards: Optional[list[Card]] = None
+    bankerTotal: Optional[int] = None
+    playerTotal: Optional[int] = None
+    margin: Optional[int] = None  # bankerTotal - playerTotal, range -9..9; 0 for Tie
+    bankerCardCount: Optional[int] = None
+    playerCardCount: Optional[int] = None
+    totalCardCount: Optional[int] = None
+    bankerPair: Optional[bool] = None
+    playerPair: Optional[bool] = None
+    bankerPerfectPair: Optional[bool] = None
+    playerPerfectPair: Optional[bool] = None
+    naturalType: Optional[NaturalType] = None
+    lucky6Result: Optional[Lucky6Result] = None
 
 
 class RoundCreateRequest(BaseModel):
@@ -81,6 +109,7 @@ class Pattern(BaseModel):
     nlDescription: str
     canonicalSequence: str
     minWindowLen: int
+    structuralCategory: str
     predictedNext: Outcome
     baseConfidence: float
     textForEmbedding: str
@@ -142,6 +171,7 @@ class PatternMatch(BaseModel):
     predictedNext: Outcome
     confidence: float
     lowConfidence: bool = False
+    alsoConsistentWith: list[str] = Field(default_factory=list)
 
 
 class MatchResult(BaseModel):
@@ -291,3 +321,38 @@ class DerivedMatchResult(BaseModel):
     currentRoadsText: str
     topMatches: list[DerivedPatternMatch]
     noMatch: bool = False
+
+
+# --------------------------------------------------------------------------
+# Side Bet (Lucky 6 v1) — see docs/side-bet-lucky6-plan.md
+# --------------------------------------------------------------------------
+
+DatasetType = Literal["demo", "monte_carlo"]
+
+
+class SideBetMatchResult(BaseModel):
+    shoeId: str
+    sourceRoundNo: int
+    predictionForRoundNo: int
+    triggeredAt: datetime = Field(default_factory=utcnow)
+
+    windowLength: int
+    datasetType: DatasetType
+    insufficientData: bool = False
+    reason: Optional[str] = None
+
+    topSimilarityScore: Optional[float] = None
+    neighborCount: int = 0
+
+    lucky6TwoCardHits: int = 0
+    lucky6TwoCardRate: Optional[float] = None
+    lucky6TwoCardBaseline: Optional[float] = None
+    lucky6TwoCardLift: Optional[float] = None
+
+    lucky6ThreeCardHits: int = 0
+    lucky6ThreeCardRate: Optional[float] = None
+    lucky6ThreeCardBaseline: Optional[float] = None
+    lucky6ThreeCardLift: Optional[float] = None
+
+    corpusVersion: Optional[str] = None
+    featureVersion: Optional[str] = None

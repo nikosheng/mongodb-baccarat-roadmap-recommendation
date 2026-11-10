@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { DerivedMatchResult, MatchResult, RoundDoc, Shoe } from "../api/types";
+import type { DerivedMatchResult, MatchResult, RoundDoc, Shoe, SideBetMatchResult } from "../api/types";
 
 export type WsStatus = "connecting" | "connected" | "disconnected";
 
@@ -21,6 +21,11 @@ interface AppState {
   latestDerivedMatch: DerivedMatchResult | null;
   derivedMatchHistory: DerivedMatchResult[];
   pushDerivedMatch: (match: DerivedMatchResult) => void;
+
+  // Live matches (Side Bet / Lucky 6)
+  latestSideBetMatch: SideBetMatchResult | null;
+  sideBetMatchHistory: SideBetMatchResult[];
+  pushSideBetMatch: (match: SideBetMatchResult) => void;
 
   // WebSocket
   wsStatus: WsStatus;
@@ -50,6 +55,8 @@ export const useAppStore = create<AppState>((set) => ({
       matchHistory: [],
       latestDerivedMatch: null,
       derivedMatchHistory: [],
+      latestSideBetMatch: null,
+      sideBetMatchHistory: [],
     }),
 
   latestMatch: null,
@@ -84,6 +91,22 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         latestDerivedMatch: match,
         derivedMatchHistory: [match, ...s.derivedMatchHistory].slice(0, 50),
+      };
+    }),
+
+  latestSideBetMatch: null,
+  sideBetMatchHistory: [],
+  pushSideBetMatch: (match) =>
+    set((s) => {
+      const isDuplicate =
+        s.sideBetMatchHistory[0]?.shoeId === match.shoeId &&
+        s.sideBetMatchHistory[0]?.sourceRoundNo === match.sourceRoundNo;
+      if (isDuplicate) {
+        return { latestSideBetMatch: match };
+      }
+      return {
+        latestSideBetMatch: match,
+        sideBetMatchHistory: [match, ...s.sideBetMatchHistory].slice(0, 50),
       };
     }),
 

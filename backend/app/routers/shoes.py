@@ -8,6 +8,7 @@ from app.services.broadcaster import manager
 from app.services.derived_match_engine import match_derived
 from app.services.derived_roads import compute_all_roads
 from app.services.match_engine import match_window
+from app.services.side_bet_engine import compute_side_bet_match
 
 router = APIRouter(prefix="/api/shoes", tags=["shoes"])
 
@@ -50,7 +51,13 @@ async def _push_and_record(shoe_id: str, round_doc: dict, table_id: str) -> dict
     match_result = await match_window(shoe_id, round_doc["roundNo"])
     derived_result = await match_derived(shoe_id, round_doc["roundNo"])
 
-    if match_result is None and derived_result is None:
+    # Side Bet only ever runs off real-card rounds (manual B/P/T has no
+    # card face data to build a feature window from).
+    side_bet_result = None
+    if round_doc.get("source") == "random_sim":
+        side_bet_result = await compute_side_bet_match(shoe_id, round_doc["roundNo"])
+
+    if match_result is None and derived_result is None and side_bet_result is None:
         return None
 
     payload: dict = {
@@ -62,6 +69,8 @@ async def _push_and_record(shoe_id: str, round_doc: dict, table_id: str) -> dict
         payload.update(match_result.model_dump())
     if derived_result is not None:
         payload["derivedMatch"] = derived_result.model_dump()
+    if side_bet_result is not None:
+        payload["sideBetMatch"] = side_bet_result.model_dump()
 
     await manager.broadcast(table_id, payload)
     return payload
@@ -96,6 +105,10 @@ async def randomize(shoe_id: str, req: RandomizeRequest):
     return {
         "rounds": [_serialize(r) for r in rounds],
         "lastMatch": last_match,
+        # True when fewer hands were dealt than requested because the
+        # physical shoe passed its cut-card; the shoe must be closed and a
+        # new one started to keep dealing (never reshuffled mid-shoe).
+        "pastCutCard": shoe_service.is_shoe_past_cut_card(shoe_id),
     }
 
 
@@ -124,4 +137,10 @@ async def get_roads(shoe_id: str):
 @router.get("/{shoe_id}/derived-matches")
 async def get_derived_matches(shoe_id: str, limit: int = 50):
     db_matches = await shoe_service.get_derived_matches(shoe_id, limit)
+    return [_serialize(m) for m in db_matches]
+
+
+@router.get("/{shoe_id}/side-bet-matches")
+async def get_side_bet_matches(shoe_id: str, limit: int = 50):
+    db_matches = await shoe_service.get_side_bet_matches(shoe_id, limit)
     return [_serialize(m) for m in db_matches]

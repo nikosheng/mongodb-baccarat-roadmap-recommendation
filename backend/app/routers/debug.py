@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.db import DERIVED_PATTERN_VECTOR_INDEX, PATTERN_VECTOR_INDEX, get_db
 from app.services.derived_roads import compute_all_roads, describe_derived_in_nl, extract_tail_symbols
 from app.services.embedder import embed_text
+from app.services.pattern_structure import compatible_categories
 from app.services.shoe_service import get_rounds, get_shoe
 from app.services.window_text import compute_window_stats, describe_window_in_nl
 from app.config import get_settings
@@ -64,6 +65,7 @@ async def window_detail(shoe_id: str, round_no: int):
                 "baseConfidence": 1,
                 "textForEmbedding": 1,
                 "canonicalSequence": 1,
+                "structuralCategory": 1,
                 "score": {"$meta": "vectorSearchScore"},
             }
         },
@@ -71,9 +73,16 @@ async def window_detail(shoe_id: str, round_no: int):
     cursor = db.patterns.aggregate(pipeline)
     all_ranked = await cursor.to_list(length=50)
 
+    live_categories = compatible_categories(window)
     for r in all_ranked:
         r["_id"] = str(r["_id"])
         r["score"] = round(r["score"], 4)
+        # Mirror match_engine.vector_search_patterns' deterministic guard so
+        # this "raw" debug ranking doesn't silently contradict the real
+        # recommendation surfaced to users: a pattern is only eligible if
+        # its structural category hasn't been ruled out by what has
+        # actually happened in the window so far (see pattern_structure.py).
+        r["eligible"] = r.get("structuralCategory") in live_categories
 
     gaps = []
     for i in range(len(all_ranked) - 1):

@@ -15,6 +15,7 @@ import type {
   Pattern,
   RoundDoc,
   Shoe,
+  SideBetMatchResult,
   SimilarPatternHit,
 } from "./types";
 
@@ -47,7 +48,7 @@ export const api = {
         { method: "POST", body: JSON.stringify({ result }) }
       ),
     randomize: (id: string, n: number) =>
-      request<{ rounds: RoundDoc[]; lastMatch: MatchResult | null }>(
+      request<{ rounds: RoundDoc[]; lastMatch: MatchResult | null; pastCutCard: boolean }>(
         `/api/shoes/${id}/randomize`,
         { method: "POST", body: JSON.stringify({ n }) }
       ),
@@ -56,6 +57,8 @@ export const api = {
     getRoads: (id: string) => request<AllRoads>(`/api/shoes/${id}/roads`),
     getDerivedMatches: (id: string, limit = 50) =>
       request<DerivedMatchResult[]>(`/api/shoes/${id}/derived-matches?limit=${limit}`),
+    getSideBetMatches: (id: string, limit = 50) =>
+      request<SideBetMatchResult[]>(`/api/shoes/${id}/side-bet-matches?limit=${limit}`),
   },
   patterns: {
     list: (params?: { category?: string; enabled?: boolean }) => {

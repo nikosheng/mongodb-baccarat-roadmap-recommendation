@@ -98,8 +98,11 @@ async def test_match_derived_high_confidence_above_threshold():
         result = await derived_match_engine.match_derived("shoe1", len(results))
 
     assert result is not None
+    # The formal recommendation only ever surfaces a single (the top) pick,
+    # even when the raw hit list had more than one candidate.
+    assert len(result.topMatches) == 1
+    assert result.topMatches[0].name == "三元及第"
     assert result.topMatches[0].lowConfidence is False
-    assert result.topMatches[1].lowConfidence is True
     assert result.noMatch is False
 
 

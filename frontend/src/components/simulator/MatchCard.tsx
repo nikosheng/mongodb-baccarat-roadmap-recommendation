@@ -2,11 +2,8 @@ import type { PatternMatch } from "../../api/types";
 import { OutcomeBadge } from "../common/Badge";
 import { ScoreBar } from "../common/ScoreBar";
 
-const MEDALS = ["🥇", "🥈", "🥉"];
-
-export function MatchCard({ match, rank }: { match: PatternMatch; rank: number }) {
-  const medal = MEDALS[rank] ?? `${rank + 1}.`;
-  const isTop = rank === 0 && !match.lowConfidence;
+export function MatchCard({ match }: { match: PatternMatch }) {
+  const isTop = !match.lowConfidence;
 
   return (
     <div
@@ -17,9 +14,7 @@ export function MatchCard({ match, rank }: { match: PatternMatch; rank: number }
       }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="font-semibold">
-          {medal} {match.name}
-        </span>
+        <span className="font-semibold">{match.name}</span>
         {match.lowConfidence && (
           <span className="text-xs px-2 py-0.5 rounded bg-border-dim text-text-muted">信心低</span>
         )}
@@ -36,6 +31,11 @@ export function MatchCard({ match, rank }: { match: PatternMatch; rank: number }
           <span className="text-sm text-text-muted">{(match.confidence * 100).toFixed(0)}%</span>
         </div>
       </div>
+      {match.alsoConsistentWith && match.alsoConsistentWith.length > 0 && (
+        <div className="mt-2 text-xs text-text-muted border-t border-border-dim/50 pt-2">
+          目前走勢同時符合：{match.alsoConsistentWith.join("、")}（分數非常接近，局數仍不足以明確區分）
+        </div>
+      )}
     </div>
   );
 }

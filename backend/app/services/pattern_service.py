@@ -17,6 +17,7 @@ from app.models.schemas import (
     SimilarPatternHit,
 )
 from app.services.embedder import embed_text
+from app.services.pattern_structure import classify_structure
 from app.services.window_text import describe_window_in_nl
 
 
@@ -30,6 +31,14 @@ def expand_sequence(canonical: str) -> list[str]:
 
 def infer_min_window_len(canonical_seq: list[str]) -> int:
     return len(canonical_seq)
+
+
+def infer_structural_category(canonical_seq: list[str]) -> str:
+    """Classify a pattern's canonicalSequence into a coarse narrative shape
+    (see pattern_structure.py). Stored on every pattern so match_engine can
+    cheaply filter candidates by structural compatibility with the live
+    window instead of a raw length cutoff."""
+    return classify_structure(canonical_seq)
 
 
 async def build_embedding_payload(canonical_sequence: str) -> EmbedPreviewResponse:
@@ -62,6 +71,7 @@ async def create_pattern(req: PatternCreateRequest) -> dict:
         "nlDescription": req.nlDescription,
         "canonicalSequence": req.canonicalSequence.strip().upper(),
         "minWindowLen": infer_min_window_len(seq),
+        "structuralCategory": infer_structural_category(seq),
         "predictedNext": req.predictedNext,
         "baseConfidence": req.baseConfidence,
         "textForEmbedding": text,
@@ -99,6 +109,7 @@ async def update_pattern(pattern_id: str, req: PatternUpdateRequest) -> dict | N
         vector = await embed_text(text, mode="document")
         update_fields["canonicalSequence"] = update_fields["canonicalSequence"].strip().upper()
         update_fields["minWindowLen"] = infer_min_window_len(seq)
+        update_fields["structuralCategory"] = infer_structural_category(seq)
         update_fields["textForEmbedding"] = text
         update_fields["textVersion"] = settings.nl_describer_version
         update_fields["vector"] = vector

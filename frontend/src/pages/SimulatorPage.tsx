@@ -7,11 +7,15 @@ import { RecentWindow } from "../components/simulator/RecentWindow";
 import { RoundInputPanel } from "../components/simulator/RoundInputPanel";
 import { MatchRanking } from "../components/simulator/MatchRanking";
 import { DerivedMatchRanking } from "../components/simulator/DerivedMatchRanking";
+import { SideBetPanel } from "../components/simulator/SideBetPanel";
+import { CardFaceDisplay } from "../components/simulator/CardFaceDisplay";
 import { HistoryLog } from "../components/simulator/HistoryLog";
 import { ShoeHeader } from "../components/simulator/ShoeHeader";
 import { ConnectionStatus } from "../components/common/ConnectionDot";
 import { DebugInspector } from "../components/simulator/DebugInspector";
+import { LongDragonAnimation } from "../components/simulator/LongDragonAnimation";
 import { useTableWebSocket } from "../hooks/useWebSocket";
+import { useLongDragonTrigger } from "../hooks/useLongDragonTrigger";
 import { useAppStore } from "../stores/useAppStore";
 
 export function SimulatorPage() {
@@ -21,14 +25,17 @@ export function SimulatorPage() {
   const latestMatch = useAppStore((s) => s.latestMatch);
   const matchHistory = useAppStore((s) => s.matchHistory);
   const latestDerivedMatch = useAppStore((s) => s.latestDerivedMatch);
+  const latestSideBetMatch = useAppStore((s) => s.latestSideBetMatch);
   const setShoe = useAppStore((s) => s.setShoe);
   const setRounds = useAppStore((s) => s.setRounds);
   const addRoundLocal = useAppStore((s) => s.addRoundLocal);
   const pushMatch = useAppStore((s) => s.pushMatch);
   const pushDerivedMatch = useAppStore((s) => s.pushDerivedMatch);
+  const pushSideBetMatch = useAppStore((s) => s.pushSideBetMatch);
   const resetShoe = useAppStore((s) => s.resetShoe);
 
   useTableWebSocket(currentShoe?.tableId ?? null);
+  const dragonKey = useLongDragonTrigger();
 
   const startNewShoe = useCallback(async () => {
     setLoading(true);
@@ -65,6 +72,7 @@ export function SimulatorPage() {
           pushMatch({ ...match, type: "match" });
         }
         if (match.derivedMatch) pushDerivedMatch(match.derivedMatch);
+        if (match.sideBetMatch) pushSideBetMatch(match.sideBetMatch);
       }
     } finally {
       setLoading(false);
@@ -84,6 +92,7 @@ export function SimulatorPage() {
           pushMatch({ ...lastMatch, type: "match" });
         }
         if (lastMatch.derivedMatch) pushDerivedMatch(lastMatch.derivedMatch);
+        if (lastMatch.sideBetMatch) pushSideBetMatch(lastMatch.sideBetMatch);
       }
     } finally {
       setLoading(false);
@@ -92,6 +101,7 @@ export function SimulatorPage() {
 
   return (
     <div className="space-y-6">
+      {dragonKey && <LongDragonAnimation key={dragonKey} />}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div className="rounded-lg border border-border-dim bg-bg-card p-4 space-y-4">
@@ -109,6 +119,8 @@ export function SimulatorPage() {
               disabled={loading || !currentShoe}
             />
           </div>
+
+          <CardFaceDisplay round={rounds.length > 0 ? rounds[rounds.length - 1] : null} />
         </div>
 
         <div className="space-y-4">
@@ -119,6 +131,10 @@ export function SimulatorPage() {
           <div>
             <div className="text-sm font-semibold mb-2">🎯 下三路推薦排行榜</div>
             <DerivedMatchRanking match={latestDerivedMatch} />
+          </div>
+          <div>
+            <div className="text-sm font-semibold mb-2">🍀 Side Bet(Lucky 6)探索性統計</div>
+            <SideBetPanel match={latestSideBetMatch} />
           </div>
           <HistoryLog history={matchHistory} rounds={rounds} />
           <div className="rounded-lg border border-border-dim bg-bg-card p-3">
